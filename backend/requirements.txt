@@ -1,4 +1,4 @@
-FastAPI
+fastapi[standard]
 uvicorn
 pydantic
 httpx
