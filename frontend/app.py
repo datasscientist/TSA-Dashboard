@@ -1,24 +1,21 @@
 import streamlit as st
-import requests
+from utils.api_client import APIClient
 
 # Set the title of the Streamlit app
 st.title("Streamlit FastAPI Application")
 
-# Define a function to call the FastAPI backend
-def get_data_from_backend():
-    response = requests.get("http://backend:8000/api/data")  # Adjust the endpoint as needed
-    if response.status_code == 200:
-        return response.json()
-    else:
-        st.error("Failed to fetch data from the backend.")
-        return None
+# Create API client - use "backend" as hostname when using Docker
+api_client = APIClient(base_url="http://backend:8000")
+
+# For local development outside Docker:
+# api_client = APIClient(base_url="http://localhost:8000")
 
 # Fetch data from the backend
-data = get_data_from_backend()
+data = api_client.get_data()
 
 # Display the data in the Streamlit app
 if data:
     st.write("Data from FastAPI backend:")
     st.json(data)  # Display the data in a JSON format
 else:
-    st.write("No data available.")
+    st.write("No data available. Make sure the backend is running.")
