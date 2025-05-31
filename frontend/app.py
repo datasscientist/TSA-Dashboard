@@ -1,242 +1,208 @@
 import dash_bootstrap_components as dbc
-from dash import Dash, dcc, html, Input, Output, callback
-import pandas as pd
-import utils.data_extractor as de  # importar nuestro módulo utils.py
-import components.filters as filters  # importar nuestro módulo components.py
-import plotly.express as px
+from dash import Dash, dcc, html, Input, Output
+import utils.data_extractor as de  # módulo refactorizado para carga y filtrado de datos
+import components.filters as filters  # módulo de filtros y funciones de graficación
 import datetime as dt
+import plotly.express as px
+import pandas as pd
 
 # Cargar datos al iniciar la aplicación
 data = de.load_data()
-df_reservas = data["reservaciones"]
-df_estatus = data["estatus"]
-df_agencias = data["agencias"]
-df_empresas = data["empresas"]
-df_canales = data["canales"]
+df_reservas = data['reservaciones']
+df_empresas = data['empresas']
+df_canales = data['canales']
+df_agencias = data['agencias']
 
-# Unir descripción de estatus al dataframe principal de reservas
-df_reservas = df_reservas.merge(
-    df_estatus[['ID_estatus_reservaciones', 'descripcion']],
-    on="ID_estatus_reservaciones",
-    how="left"
-).rename(columns={"descripcion": "estatus_desc"})
-
-# Inicializar la aplicación Dash
+# Inicializar aplicación Dash con Bootstrap
 app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
-app.title = "Dashboard KPI Hoteleros"
+app.title = 'Dashboard KPI Hoteleros'
 
-# Para el RangeSlider de fechas necesitamos los min/max como enteros
-start_year = dt.datetime(2019, 1, 1)
-end_year   = dt.datetime(2021, 12, 31)
-min_ts = int(start_year.timestamp())
-max_ts = int(end_year.timestamp())
-
-# Generar marcas mensuales legibles
-all_months = pd.date_range(start_year, end_year, freq="MS")
-marks = {
-    int(dt.datetime(ts.year, ts.month, 1).timestamp()): ts.strftime("%Y-%m-01")
-    for ts in all_months
-}
-
-# Definir el layout de la aplicación
-app.layout = html.Div([
-    html.H1("Dashboard de Reservas Hoteleras", style={"textAlign": "center"}),
-    html.Div([
-        # FECHA
-        html.Div([
-            html.Label("Fecha (rango)"),
-            dcc.RangeSlider(
-                id='filter-fechas-slider',
-                min=min_ts,
-                max=max_ts,
-                step=86400 * 7,      # mueve en semanas
-                value=[min_ts, max_ts],
-                marks=marks,
-                allowCross=False,
-                tooltip={
-                    "placement": "bottom",
-                    "always_visible": False
-                }
-            ),
-            html.Div(id='output-fecha', style={'marginTop': '5px', 'fontWeight': 'bold'})
-        ], style={"flex": "2", "padding": "0 10px"}),
-
-        # EMPRESA
-        html.Div([
-            html.Label("Empresa"),
-            dcc.Dropdown(
-                id="filter-empresa",
-                options=[{"label": n, "value": i}
-                         for i, n in zip(df_empresas["ID_empresa"], df_empresas["Empresa_nombre"])],
-                multi=True,
-                placeholder="Filtrar por empresa..."
-            )
-        ], style={"flex": "1", "padding": "0 10px"}),
-
-        # CANAL
-        html.Div([
-            html.Label("Canal"),
-            dcc.Dropdown(
-                id="filter-canal",
-                options=[{"label": n, "value": i}
-                         for i, n in zip(df_canales["ID_canal"], df_canales["Canal_nombre"])],
-                multi=True,
-                placeholder="Filtrar por canal..."
-            )
-        ], style={"flex": "1", "padding": "0 10px"}),
-
-        # AGENCIA
-        html.Div([
-            html.Label("Agencia"),
-            dcc.Dropdown(
-                id="filter-agencia",
-                options=[{"label": n, "value": i}
-                         for i, n in zip(df_agencias["ID_Agencia"], df_agencias["Agencia_nombre"])],
-                multi=True,
-                placeholder="Filtrar por agencia..."
-            )
-        ], style={"flex": "1", "padding": "0 10px"}),
-
-        # FRECUENCIA
-        html.Div([
-            html.Label("Frecuencia"),
-            dcc.RadioItems(
-                id="filter-freq",
-                options=[
-                    {"label": "Diario", "value": "D"},
-                    {"label": "Semanal", "value": "W"},
-                    {"label": "Mensual", "value": "M"}
-                ],
-                value="D",
-                inline=True
-            )
-        ], style={"flex": "1", "padding": "0 10px"})
-    ], style={
-        "display": "flex",
-        "alignItems": "flex-end",
-        "marginBottom": "20px"
-    }),
-
-    # Indicadores globales
-    html.Div(className="indicadores", children=[
-        dcc.Graph(id="indicador-adr"),
-        dcc.Graph(id="indicador-revpar"),
-        dcc.Graph(id="indicador-ocupacion"),
-        dcc.Graph(id="indicador-estancia")
-    ], style={"display": "flex", "justifyContent": "space-around"}),
-
-    # Gráficas de series temporales
-    dcc.Graph(id="grafico-volumen"),
-    dcc.Graph(id="grafico-roomnights"),
-    dcc.Graph(id="grafico-ocupacion"),
-    dcc.Graph(id="grafico-revpar"),
-
-    # Distribuciones
-    dcc.Graph(id="grafico-leadtime"),
-    dcc.Graph(id="grafico-estancia"),
-    dcc.Graph(id="grafico-cancel")
-])
-
-# Definir el callback para actualizar las gráficas y el texto de fecha
-@app.callback(
-    Output("grafico-volumen", "figure"),
-    Output("grafico-roomnights", "figure"),
-    Output("grafico-ocupacion", "figure"),
-    Output("grafico-revpar", "figure"),
-    Output("grafico-leadtime", "figure"),
-    Output("grafico-estancia", "figure"),
-    Output("grafico-cancel", "figure"),
-    Output("indicador-adr", "figure"),
-    Output("indicador-revpar", "figure"),
-    Output("indicador-ocupacion", "figure"),
-    Output("indicador-estancia", "figure"),
-    Output("output-fecha", "children"),
-    Input("filter-fechas-slider", "value"),
-    Input("filter-empresa", "value"),
-    Input("filter-canal", "value"),
-    Input("filter-agencia", "value"),
-    Input("filter-freq", "value")
+# ---------------------------------------------------
+# HEADER FIJO CON LOGO Y TÍTULO PEQUEÑOS, FILTROS DEBAJO
+# ---------------------------------------------------
+header = html.Div(
+    style={
+        'position': 'fixed',
+        'top': '0',
+        'left': '0',
+        'right': '0',
+        'zIndex': '999',
+        'backgroundColor': '#262626',
+        'boxSizing': 'border-box',
+        'padding': '10px 40px 5px 40px'  # menos padding para que quede compacto
+    },
+    children=[
+        # Primera fila: logo + título
+        html.Div(
+            style={'position': 'relative', 'width': '100%', 'height': '40px', 'marginTop': '10px',},
+            children=[
+                html.Img(
+                    src=app.get_asset_url('tca_logo.png'),
+                    style={
+                        'position': 'absolute',
+                        'left': '0px',       # separa del borde izquierdo
+                        'height': '50px'
+                    },
+                    alt='Logo TCA'
+                ),
+                html.H4(
+                    'Dashboard de Reservas Hoteleras',
+                    style={
+                        'position': 'absolute',
+                        'left': '50%',
+                        'transform': 'translateX(-50%)',
+                        'color': 'white',
+                        'margin': '0',
+                        'fontSize': '32px'
+                    }
+                )
+            ]
+        ),
+        # Segunda fila: filtros (ocupan todo el ancho)
+        html.Div(
+            style={
+                'marginTop': '30px',
+                'paddingBottom': '0px',
+                'width': '100%',
+                'backgroundColor': '#262626'
+            },
+            children=[
+                dbc.Container(
+                    fluid=True,
+                    style={'padding': '0'},
+                    children=[
+                        filters.crear_controles(df_reservas, df_empresas, df_canales, df_agencias)
+                    ]
+                )
+            ]
+        )
+    ]
 )
-def actualizar_dashboard(fecha_slider, empresas, canales, agencias, freq):
-    # Convertir timestamps a date
-    start_date = dt.datetime.fromtimestamp(fecha_slider[0]).date()
-    end_date   = dt.datetime.fromtimestamp(fecha_slider[1]).date()
-    # Aplicar filtros
-    empresas_sel = empresas if empresas else None
-    canales_sel  = canales  if canales  else None
-    agencias_sel = agencias if agencias else None
-    df_filtrado  = de.filtrar_datos(df_reservas, start_date, end_date,
-                                    empresas_sel, canales_sel, agencias_sel)
-    # Calcular KPI
-    kpis = de.calcular_kpis(df_filtrado, freq, total_habs=100)
 
-    # Figuras temporales
-    fig_vol = filters.grafica_linea(
-        x=kpis["volumen"].index, y=kpis["volumen"],
-        titulo="Volumen de Reservas", eje_y="Reservas"
-    )
-    fig_rn = filters.grafica_linea(
-        x=kpis["room_nights"].index, y=kpis["room_nights"],
-        titulo="Noches de Habitación Vendidas", eje_y="Room Nights"
-    )
-    fig_occ = filters.grafica_linea(
-        x=kpis["ocupacion"].index, y=kpis["ocupacion"],
-        titulo="Tasa de Ocupación", eje_y="Porcentaje", formato_y="pct"
-    )
-    fig_rp = filters.grafica_linea(
-        x=kpis["revpar"].index, y=kpis["revpar"],
-        titulo="RevPAR", eje_y="RevPAR", formato_y="money"
+# ---------------------------------------------------
+# LAYOUT PRINCIPAL
+# ---------------------------------------------------
+app.layout = html.Div(
+    style={'margin': '0', 'padding': '0'},
+    children=[
+        # Header fijo (logo + título + filtros)
+        header,
+
+        # Contenedor principal con paddingTop suficiente para dejar espacio al header
+        dbc.Container(
+            fluid=True,
+            style={'paddingTop': '160px'},  # Ajustar si el header cambia de altura
+            children=[
+                # Separador opcional (queda debajo del header fijo)
+                html.Hr(style={'borderColor': '#444444', 'margin': '0'}),
+
+                # KPI Cards
+                dbc.Row([
+                    dbc.Col(dcc.Graph(id='indicador-adr', config={'displayModeBar': False}), xs=12, sm=6, md=3),
+                    dbc.Col(dcc.Graph(id='indicador-revpar', config={'displayModeBar': False}), xs=12, sm=6, md=3),
+                    dbc.Col(dcc.Graph(id='indicador-ocupacion', config={'displayModeBar': False}), xs=12, sm=6, md=3),
+                    dbc.Col(dcc.Graph(id='indicador-estancia', config={'displayModeBar': False}), xs=12, sm=6, md=3),
+                ], className='mb-4'),
+
+                # Series temporales: dos gráficos por fila
+                dbc.Row([
+                    dbc.Col(dcc.Graph(id='grafico-volumen', config={'responsive': True}), xs=12, md=6),
+                    dbc.Col(dcc.Graph(id='grafico-roomnights', config={'responsive': True}), xs=12, md=6),
+                ], className='mb-4'),
+                dbc.Row([
+                    dbc.Col(dcc.Graph(id='grafico-ocupacion', config={'responsive': True}), xs=12, md=6),
+                    dbc.Col(dcc.Graph(id='grafico-revpar', config={'responsive': True}), xs=12, md=6),
+                ], className='mb-4'),
+
+                # Distribuciones: tres gráficos en una fila
+                dbc.Row([
+                    dbc.Col(dcc.Graph(id='grafico-leadtime', config={'responsive': True}), xs=12, md=4),
+                    dbc.Col(dcc.Graph(id='grafico-estancia', config={'responsive': True}), xs=12, md=4),
+                    dbc.Col(dcc.Graph(id='grafico-cancel', config={'responsive': True}), xs=12, md=4),
+                ], className='mb-4'),
+            ]
+        )
+    ]
+)
+
+# Callback para actualizar datos y gráficas (ahora también actualiza label-fechas)
+@app.callback(
+    Output('grafico-volumen', 'figure'),
+    Output('grafico-roomnights', 'figure'),
+    Output('grafico-ocupacion', 'figure'),
+    Output('grafico-revpar', 'figure'),
+    Output('grafico-leadtime', 'figure'),
+    Output('grafico-estancia', 'figure'),
+    Output('grafico-cancel', 'figure'),
+    Output('indicador-adr', 'figure'),
+    Output('indicador-revpar', 'figure'),
+    Output('indicador-ocupacion', 'figure'),
+    Output('indicador-estancia', 'figure'),
+    Output('label-fechas', 'children'),      
+    Input('filter-fechas-slider', 'value'),
+    Input('filter-empresa', 'value'),
+    Input('filter-canal', 'value'),
+    Input('filter-agencia', 'value'),
+    Input('filter-freq', 'value'),
+)
+def actualizar_dashboard(fecha_offset, empresas, canales, agencias, freq):
+    """
+    fecha_offset: [offset_inicio, offset_fin] en días desde 2019-01-01.
+    """
+    # 1) Reconstruir fechas reales
+    fecha_base = dt.date(2019, 1, 1)
+    offset_inicio, offset_fin = fecha_offset
+    sd = fecha_base + dt.timedelta(days=offset_inicio)
+    ed = fecha_base + dt.timedelta(days=offset_fin)
+
+    # 2) Texto que irá en label-fechas (justo encima del slider)
+    texto_rango_label = f"Rango de fechas: Del {sd:%Y-%m-%d} al {ed:%Y-%m-%d}"
+
+    # 3) Filtrar datos y calcular KPIs
+    df_fil = de.filtrar_datos(df_reservas, sd, ed, empresas or None, canales or None, agencias or None)
+    kpis = de.calcular_kpis(df_fil, freq, total_habs=100)
+
+    # 4) Crear gráficas (igual que antes)
+    fig_vol = filters.grafica_linea(kpis['volumen'].index, kpis['volumen'],
+                                    titulo='Volumen de Reservas', eje_y='Reservas')
+    fig_rn  = filters.grafica_linea(kpis['room_nights'].index, kpis['room_nights'],
+                                    titulo='Noches de Habitación Vendidas', eje_y='Room Nights')
+    fig_occ = filters.grafica_linea(kpis['ocupacion'].index, kpis['ocupacion'],
+                                    titulo='Tasa de Ocupación', eje_y='Porcentaje', formato_y='pct')
+    fig_rp  = filters.grafica_linea(kpis['revpar'].index, kpis['revpar'],
+                                    titulo='RevPAR', eje_y='RevPAR', formato_y='money')
+
+    lead = ((df_fil['h_fec_lld_ok'] - df_fil['h_res_fec_ok']).dt.days
+            if not df_fil.empty else [])
+    fig_lead = filters.grafica_histograma(lead, titulo='Anticipación de Reserva',
+                                          xaxis_title='Días de anticipación')
+    fig_stay = filters.grafica_boxplot(df_fil['h_num_noc'] if not df_fil.empty else [],
+                                       titulo='Duración de Estancia', yaxis_title='Noches por reserva')
+    tasas = {'Cancelación': kpis['global']['tasa_cancel'], 'No Show': kpis['global']['tasa_noshow']}
+    fig_cancel = px.bar(x=list(tasas.keys()), y=list(tasas.values()),
+                        title='Tasa de Cancelación y No-Show',
+                        color_discrete_sequence=[filters.PRIMARY_COLOR])
+    fig_cancel.update_layout(
+        yaxis_range=[0,100], template='plotly_white',
+        plot_bgcolor=filters.BACKGROUND_COLOR,
+        paper_bgcolor=filters.BACKGROUND_COLOR,
+        font_color=filters.TEXT_COLOR,
+        margin=dict(l=20, r=20, t=30, b=20), height=350
     )
 
-    # Distribuciones
-    if not df_filtrado.empty:
-        lead_times = (df_filtrado["h_fec_lld_ok"] -
-                      df_filtrado["h_res_fec_ok"]).dt.days
-    else:
-        lead_times = []
-    fig_lead  = filters.grafica_histograma(
-        lead_times, titulo="Anticipación de Reserva",
-        xaxis_title="Días de anticipación"
-    )
-    fig_stay  = filters.grafica_boxplot(
-        df_filtrado["h_num_noc"] if not df_filtrado.empty else [],
-        titulo="Duración de Estancia",
-        yaxis_title="Noches por reserva"
-    )
-    tasas = {"Cancelación": kpis["global"]["tasa_cancel"],
-             "No Show":     kpis["global"]["tasa_noshow"]}
-    fig_cancel = px.bar(
-        x=list(tasas.keys()), y=list(tasas.values()),
-        labels={"x": "", "y": "% de reservas"},
-        title="Tasa de Cancelación y No-Show"
-    )
-    fig_cancel.update_layout(yaxis_range=[0,100])
-    fig_cancel.update_traces(marker_color=["#d62728", "#9467bd"])
+    fig_ind_adr      = filters.grafica_indicador(kpis['global']['adr'],      titulo='ADR')
+    fig_ind_revpar   = filters.grafica_indicador(kpis['global']['revpar'],   titulo='RevPAR')
+    fig_ind_ocup     = filters.grafica_indicador(kpis['global']['ocupacion'], titulo='Ocupación', sufijo='%')
+    fig_ind_estancia = filters.grafica_indicador(kpis['global']['avg_stay'],  titulo='Estancia Prom.', sufijo=' noches')
 
-    # Indicadores
-    fig_ind_adr      = filters.grafica_indicador(
-        kpis["global"]["adr"],      titulo="ADR"
-    )
-    fig_ind_revpar   = filters.grafica_indicador(
-        kpis["global"]["revpar"],   titulo="RevPAR"
-    )
-    fig_ind_ocup     = filters.grafica_indicador(
-        kpis["global"]["ocupacion"], titulo="Ocupación", sufijo="%"
-    )
-    fig_ind_estancia = filters.grafica_indicador(
-        kpis["global"]["avg_stay"],  titulo="Estancia Prom.", sufijo=" noches"
-    )
-
-    # Texto del rango de fechas
-    rango_texto = f"{start_date.strftime('%Y-%m-%d')}  ⇄  {end_date.strftime('%Y-%m-%d')}"
-
+    # 5) Retornar todas las figuras y, al final, el texto para label-fechas
     return (
         fig_vol, fig_rn, fig_occ, fig_rp,
         fig_lead, fig_stay, fig_cancel,
         fig_ind_adr, fig_ind_revpar, fig_ind_ocup, fig_ind_estancia,
-        rango_texto
+        texto_rango_label
     )
 
-# Ejecutar la aplicación en modo debug
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     app.run(debug=True)

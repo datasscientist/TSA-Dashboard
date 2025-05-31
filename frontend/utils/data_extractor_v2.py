@@ -129,17 +129,9 @@ def calcular_kpis(
     ingreso_total = grp['h_tfa_total'].sum()
     adr = ingreso_total.div(room_nights.replace({0: pd.NA}))
 
-    # Calcular días en cada periodo
-    if freq == 'D':
-        dias_en_periodo = pd.Series(1, index=volumen.index)
-    elif freq == 'W':
-        dias_en_periodo = pd.Series(7, index=volumen.index)
-    elif freq == 'M':
-        # Para mensual, obtener días del mes de cada timestamp
-        dias_en_periodo = pd.to_datetime(volumen.index).to_series().dt.days_in_month
-    else:
-        dias_en_periodo = pd.Series(1, index=volumen.index)
-
+    # Días en cada periodo (para ocupación)
+    period_index = volumen.index
+    dias_en_periodo = period_index.to_series().apply(lambda ts: pd.Period(ts, freq=freq).length)
     ocupacion = room_nights.div(total_habs * dias_en_periodo) * 100
     revpar = adr.mul(ocupacion.div(100))
 
@@ -175,3 +167,4 @@ def calcular_kpis(
             'tasa_noshow': tasa_noshow
         }
     }
+
