@@ -102,7 +102,7 @@ app.layout = html.Div(
                     dbc.Col(dcc.Graph(id='indicador-revpar', config={'displayModeBar': False}), xs=12, sm=6, md=3),
                     dbc.Col(dcc.Graph(id='indicador-ocupacion', config={'displayModeBar': False}), xs=12, sm=6, md=3),
                     dbc.Col(dcc.Graph(id='indicador-estancia', config={'displayModeBar': False}), xs=12, sm=6, md=3),
-                ], className='mb-4'),
+                ], className='mb-4 mt-4'),
 
                 # Series temporales: dos gráficos por fila
                 dbc.Row([
@@ -160,17 +160,17 @@ def actualizar_dashboard(fecha_offset, empresas, canales, agencias, freq):
 
     # 3) Filtrar datos y calcular KPIs
     df_fil = de.filtrar_datos(df_reservas, sd, ed, empresas or None, canales or None, agencias or None)
-    kpis = de.calcular_kpis(df_fil, freq, total_habs=100)
+    kpis = de.calcular_kpis(df_fil, freq, total_habs=735)
 
     # 4) Crear gráficas (igual que antes)
     fig_vol = filters.grafica_linea(kpis['volumen'].index, kpis['volumen'],
                                     titulo='Volumen de Reservas', eje_y='Reservas')
     fig_rn  = filters.grafica_linea(kpis['room_nights'].index, kpis['room_nights'],
-                                    titulo='Noches de Habitación Vendidas', eje_y='Room Nights')
+                                    titulo='Noches de Habitación Vendidas', eje_y='Noches de Habitación')
     fig_occ = filters.grafica_linea(kpis['ocupacion'].index, kpis['ocupacion'],
                                     titulo='Tasa de Ocupación', eje_y='Porcentaje', formato_y='pct')
     fig_rp  = filters.grafica_linea(kpis['revpar'].index, kpis['revpar'],
-                                    titulo='RevPAR', eje_y='RevPAR', formato_y='money')
+                                    titulo='RevPAR', eje_y='RevPAR (MXN)', formato_y='money')
 
     lead = ((df_fil['h_fec_lld_ok'] - df_fil['h_res_fec_ok']).dt.days
             if not df_fil.empty else [])
@@ -178,20 +178,22 @@ def actualizar_dashboard(fecha_offset, empresas, canales, agencias, freq):
                                           xaxis_title='Días de anticipación')
     fig_stay = filters.grafica_boxplot(df_fil['h_num_noc'] if not df_fil.empty else [],
                                        titulo='Duración de Estancia', yaxis_title='Noches por reserva')
+    
     tasas = {'Cancelación': kpis['global']['tasa_cancel'], 'No Show': kpis['global']['tasa_noshow']}
     fig_cancel = px.bar(x=list(tasas.keys()), y=list(tasas.values()),
                         title='Tasa de Cancelación y No-Show',
                         color_discrete_sequence=[filters.PRIMARY_COLOR])
     fig_cancel.update_layout(
-        yaxis_range=[0,100], template='plotly_white',
+        yaxis_range=[0,30], template='plotly_white',
+       yaxis_title='Tasa (%)',
         plot_bgcolor=filters.BACKGROUND_COLOR,
         paper_bgcolor=filters.BACKGROUND_COLOR,
         font_color=filters.TEXT_COLOR,
         margin=dict(l=20, r=20, t=30, b=20), height=350
     )
 
-    fig_ind_adr      = filters.grafica_indicador(kpis['global']['adr'],      titulo='ADR')
-    fig_ind_revpar   = filters.grafica_indicador(kpis['global']['revpar'],   titulo='RevPAR')
+    fig_ind_adr      = filters.grafica_indicador(kpis['global']['adr'],      titulo='ADR',sufijo=' MXN')
+    fig_ind_revpar   = filters.grafica_indicador(kpis['global']['revpar'],   titulo='RevPAR', sufijo=' MNX')
     fig_ind_ocup     = filters.grafica_indicador(kpis['global']['ocupacion'], titulo='Ocupación', sufijo='%')
     fig_ind_estancia = filters.grafica_indicador(kpis['global']['avg_stay'],  titulo='Estancia Prom.', sufijo=' noches')
 

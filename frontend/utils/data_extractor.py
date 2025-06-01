@@ -41,6 +41,14 @@ def load_data(data_dir: Optional[Path] = None) -> Dict[str, pd.DataFrame]:
     df_ages = pd.read_csv(paths['agencias'])
     df_emp = pd.read_csv(paths['empresas'])
     df_can = pd.read_csv(paths['canales'])
+    
+    df_res['ID_empresa']  = df_res['ID_empresa'].astype(int)
+    df_res['ID_canal']    = df_res['ID_canal'].astype(int)
+    df_res['ID_Agencia']  = df_res['ID_Agencia'].astype(int)
+
+    df_emp['ID_empresa']  = df_emp['ID_empresa'].astype(int)
+    df_can['ID_canal']    = df_can['ID_canal'].astype(int)
+    df_ages['ID_Agencia'] = df_ages['ID_Agencia'].astype(int)
 
     # Merge estatus en reservaciones para simplificar posterior filtrado
     if 'ID_estatus_reservaciones' in df_res.columns:
@@ -97,7 +105,7 @@ def filtrar_datos(
 def calcular_kpis(
     df: pd.DataFrame,
     freq: str = 'D',
-    total_habs: int = 100
+    total_habs: int = 735
 ) -> Dict[str, Any]:
     """
     Calcula KPI temporales y globales sobre el DataFrame filtrado.

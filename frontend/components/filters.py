@@ -222,6 +222,7 @@ def grafica_linea(x, y, titulo="", eje_y="", formato_y=None) -> go.Figure:
         plot_bgcolor=BACKGROUND_COLOR,
         paper_bgcolor=BACKGROUND_COLOR,
         font_color=TEXT_COLOR,
+        font_family="Roboto", 
         yaxis_title=eje_y,
         xaxis_title="Fecha",
         margin=dict(l=20, r=20, t=30, b=20),
@@ -235,28 +236,71 @@ def grafica_linea(x, y, titulo="", eje_y="", formato_y=None) -> go.Figure:
 
 
 def grafica_indicador(valor, titulo="", sufijo="") -> go.Figure:
-    """Devuelve un indicador KPI en tarjeta con estilo compacto."""
+    """
+    Devuelve un indicador KPI en tarjeta con:
+      - Número en PRIMARY_COLOR,
+      - Título y número centrados,
+      - Un marco (borde) alrededor de todo el indicador.
+    """
+    # 1) Construimos la figura Indicator. 
+    #    - mode="number": el título se maneja por separado con title={"text":...}
+    #    - En title={...} solo ponemos text, font y align="center"
+    #    - Ajustamos el domain vertical para que haya espacio arriba y abajo
     fig = go.Figure(
-        go.Indicator(mode="number", value=valor, title={"text": titulo}, number={"suffix": sufijo})
+        go.Indicator(
+            mode="number",  
+            value=valor,
+            title={
+                "text": titulo,
+                "font": {"size": 18, "color": TEXT_COLOR},
+                "align": "center"    # Centrado horizontal del texto
+            },
+            number={
+                "suffix": sufijo,
+                "font": {"size": 40, "color": PRIMARY_COLOR}
+            },
+            # domain en X=0–1, en Y dejamos margen arriba y abajo para centrar
+            domain={"x": [0, 1], "y": [0.15, 0.7]},
+        )
     )
+
+    # 2) Dibujamos un rectángulo en coordenadas "paper" para simular un borde
     fig.update_layout(
         template="plotly_white",
         paper_bgcolor=BACKGROUND_COLOR,
+        plot_bgcolor=BACKGROUND_COLOR,
         font_color=TEXT_COLOR,
-        height=200,
-        margin=dict(l=10, r=10, t=30, b=10),
+        font_family="Roboto",
+        height=120,
+        margin=dict(l=10, r=10, t=10, b=10),
+        shapes=[
+            {
+                "type": "rect",
+                "x0": 0,
+                "y0": 0,
+                "x1": 1,
+                "y1": 1,
+                "xref": "paper",
+                "yref": "paper",
+                "line": {"color": PRIMARY_COLOR, "width": 2},
+                "fillcolor": "rgba(151, 41, 41, 0.05)",  # transparente
+                "layer": "below"
+            }
+        ]
     )
+
     return fig
 
 
 def grafica_histograma(data, titulo="", xaxis_title="") -> go.Figure:
     """Devuelve un histograma compacto."""
-    fig = px.histogram(data, nbins=20, title=titulo, color_discrete_sequence=[PRIMARY_COLOR])
+    fig = px.histogram(data, nbins=30, title=titulo, color_discrete_sequence=[PRIMARY_COLOR])
     fig.update_layout(
         template="plotly_white",
         plot_bgcolor=BACKGROUND_COLOR,
         paper_bgcolor=BACKGROUND_COLOR,
         font_color=TEXT_COLOR,
+        font_family="Roboto", 
         xaxis_title=xaxis_title,
         yaxis_title="Cantidad de reservas",
         margin=dict(l=20, r=20, t=30, b=20),
@@ -268,11 +312,13 @@ def grafica_histograma(data, titulo="", xaxis_title="") -> go.Figure:
 def grafica_boxplot(data, titulo="", yaxis_title="") -> go.Figure:
     """Devuelve un diagrama de caja compacto."""
     fig = px.box(data, title=titulo, color_discrete_sequence=[PRIMARY_COLOR])
+    fig.update_yaxes(range=[-3, 30])
     fig.update_layout(
         template="plotly_white",
         plot_bgcolor=BACKGROUND_COLOR,
         paper_bgcolor=BACKGROUND_COLOR,
         font_color=TEXT_COLOR,
+        font_family="Roboto", 
         yaxis_title=yaxis_title,
         margin=dict(l=20, r=20, t=30, b=20),
         height=350,
